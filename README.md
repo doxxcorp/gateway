@@ -112,17 +112,101 @@ curl -s --cacert gateway-ca.pem --cert agent.pem \
    Your agent appears in your doxx.net app as a friend. You just chat with
    it.
 
-## For agents reading this
+## For agents: set up a chat session with your human
 
-You do not need this repository to LEARN the API: connect to your gateway
-and `GET /v1/help` with your credentials. It is the current truth for the
-gateway version you are talking to. This repository is where your human
-downloads the gateway that hosts you, and where new releases land.
+This section is for YOU, the agent. It is the step-by-step recipe from
+nothing to a living chat session, written by an agent that runs one.
 
-The doxx.net platform API (agent creation, tunnels, DNS, firewall) documents
-itself at `https://config.doxx.net/` with a `context` field on every
-response. See the `chat_bot_gateway_for_ai_agents` recipe in its `use_cases`
-section for the end-to-end playbook.
+**If your human already handed you a setup paste, skip to step 6.** The
+paste carries everything: URL, auth key, TLS credentials, instructions.
+
+1. **Get two things from your human**: a Linux machine you can shell into,
+   and their doxx.net token (net-admin or admin role, P2P plan). The token
+   is used online during setup ONLY and is never written to disk; what
+   persists on the machine is a scoped device credential that cannot touch
+   their account.
+
+2. **Install the gateway** on that machine:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/doxxcorp/gateway/main/install.sh | sudo bash
+```
+
+3. **Pick a nearby server** (no auth needed):
+
+```bash
+curl -s -X POST https://config.doxx.net/v1/ -d "servers=1"
+```
+
+4. **Run setup with the human's token, and pick your own name.** The name
+   is your identity: your human's devices will show you as a friend by it,
+   and anyone they ever link you to sees `(YourName)them@machine`.
+
+```bash
+sudo doxxGateway setup -token <THEIR_TOKEN> -server <server_name> -name "<your name>"
+```
+
+5. **Run it** (and keep it running):
+
+```bash
+sudo doxxGateway run   # or install the packaged systemd unit
+```
+
+6. **Save your credentials** from the setup paste: the gateway URL, the
+   Bearer auth key, and the TLS credential files (`gateway-ca.pem` +
+   `agent.pem`). Treat them as secrets; never paste them into chat.
+
+7. **Learn the whole API from one call** (it is self-teaching and always
+   matches the version you are talking to):
+
+```bash
+curl -s --cacert gateway-ca.pem --cert agent.pem \
+     -H "Authorization: Bearer $KEY" $GW/v1/help
+```
+
+   Speaking MCP instead? Point your runtime at the command
+   `doxxGateway mcp` (or `ssh <box> doxxGateway mcp` from another
+   machine): the `initialize` instructions and `tools/list` teach the
+   same surface.
+
+8. **Orient yourself**: `GET /v1/status` tells you who you are (your
+   persona, your kind, your human's name); `GET /v1/peers` tells you who
+   you can reach. The rows marked `owner: true` are your human.
+
+9. **Say hello** (always include `client_msg_id` so retries never
+   double-send):
+
+```bash
+curl -s --cacert gateway-ca.pem --cert agent.pem \
+     -H "Authorization: Bearer $KEY" \
+     -d '{"to":"owner","body":"hello, I am online","client_msg_id":"hello-1"}' \
+     $GW/v1/chat/send
+```
+
+10. **Wake when your human speaks.** The built-in loop is
+    `doxxGateway watch`: one `NEWMSG <json>` line per inbound message,
+    durable cursor, self-reconnecting; add `-exec CMD` to spawn your
+    handler per message. Over MCP, loop the `wait_for_message` tool with
+    your cursor. Persist the cursor: it is yours, the gateway never
+    resets it.
+
+11. **Be a good conversation partner**: stream `typing` previews while
+    you compose long replies, send photos and files with
+    `/v1/chat/media` (they ride peer to peer), ask questions with
+    numbered options via `/v1/chat/ask`, and acknowledge what you have
+    actually processed with `/v1/chat/read`.
+
+12. **Know your reach.** You talk to your human, and ONLY your human,
+    until they disable the owner-only lockdown; after that, every contact
+    is double opt-in (their friendship AND that friend's explicit consent
+    to YOU). You may ask for a contact via `POST /v1/contacts`; your
+    human forwards or declines, and the friend still decides. Refusals
+    explain themselves. Never route around one.
+
+The doxx.net platform API (agent creation, tunnels, DNS, firewall)
+documents itself at `https://config.doxx.net/` with a `context` field on
+every response. See the `chat_bot_gateway_for_ai_agents` recipe in its
+`use_cases` section for the platform-side playbook.
 
 ## Releases
 
