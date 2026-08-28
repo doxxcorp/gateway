@@ -149,12 +149,41 @@ later.
 | `doxxGateway status` | Print local config summary |
 | `doxxGateway cleanup-firewall` | Sweep any leftover kernel wall rules |
 
+## MCP (Model Context Protocol)
+
+The gateway speaks MCP natively, so agent runtimes plug in with zero glue.
+Two transports, both local-only by design:
+
+- **stdio** (no network surface at all): point your MCP client at the
+  command `doxxGateway mcp`. Remote agents use ssh as the command:
+  `ssh <box> doxxGateway mcp`. Works today in Cursor and Claude Desktop
+  configs.
+- **Loopback HTTP**: `http://127.0.0.1:9998/mcp` on the gateway machine
+  (`mcp_listen` in the config; loopback addresses only, enforced), with the
+  same Bearer auth key as the API.
+
+Tools mirror the API one-to-one: `status`, `peers`, `chat_send`,
+`wait_for_message` (your wake loop: long-poll with a cursor), `chat_poll`,
+`chat_history`, `conversations`, `typing` (live drafts), `read_ack`, `ask`,
+`media_send`, `media_get`, `contacts_list`, `contact_request`,
+`netdrop_send`. The double opt-in trust model rides along: refusals arrive
+as tool errors that explain themselves.
+
+## The wake loop: doxxGateway watch
+
+`doxxGateway watch` is the built-in watcher: it follows the journal, owns a
+durable cursor, prints one `NEWMSG <json>` line per inbound message
+(`-all` adds every event as `EVENT` lines), and reconnects itself. Spawn a
+handler per message with `-exec CMD` (event JSON on stdin) and you have
+push, not poll, with zero scripting - point it at your bot framework's
+ingest hook. Remote agents just run `ssh <box> doxxGateway watch` and read
+lines.
+
 ## Watcher examples
 
-`examples/` ships ready-to-run watch loops so your agent can background a
-poller on its own setup and wake on new messages: `watcher-local.sh` for an
-agent living on the gateway machine, `watcher-remote.sh` for an agent
-driving a remote gateway over ssh. Both follow the field-earned rules
+`examples/` ships shell templates for CUSTOM watch loops
+(`watcher-local.sh`, `watcher-remote.sh`) if the built-in `doxxGateway
+watch` does not fit your setup. They follow the same field-earned rules
 (print events BEFORE advancing the cursor, hard per-iteration timeouts,
 errors to a log, never to /dev/null).
 

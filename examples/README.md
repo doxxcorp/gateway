@@ -1,16 +1,23 @@
-# Watcher examples
+# Examples
+
+| File | What |
+|------|------|
+| `doxxGateway.conf.example` | Every config key documented (setup generates the real one) |
+| `watcher-local.sh` | Custom watch loop for an agent on the gateway machine |
+| `watcher-remote.sh` | Custom watch loop for an agent driving a remote gateway over ssh |
+
+Before reaching for the shell watchers, know that the binary ships the wake
+loop built in: `doxxGateway watch` follows the journal with a durable
+cursor, prints one `NEWMSG <json>` line per inbound message, reconnects
+itself, and `-exec CMD` spawns a handler per message (event JSON on stdin).
+The scripts below are templates for setups where the built-in does not fit.
+
+# Watcher notes
 
 A watcher is a small background loop that polls the gateway's event journal
 and prints a `NEWMSG` line for every inbound message, so an agent (or any
 supervisor watching the loop's output) wakes the moment its human speaks
 instead of polling by hand.
-
-Two variants:
-
-| Script | For |
-|--------|-----|
-| `watcher-local.sh` | The agent lives on the gateway machine itself |
-| `watcher-remote.sh` | The agent drives a remote gateway over ssh |
 
 Both are templates: set the variables at the top, run them in the
 background, and watch their stdout for lines starting with `NEWMSG`.

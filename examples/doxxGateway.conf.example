@@ -1,0 +1,103 @@
+# doxxGateway.conf - example configuration with every key documented.
+#
+# You normally never write this file by hand: `doxxGateway setup` generates
+# it with working values and secure defaults. This example exists so you
+# know what every knob does when you tune one. Format: key=value, one per
+# line, '#' comments, no sections. chmod 600 (it holds the device
+# credential; the gateway refuses group/world-readable configs).
+
+# --- identity / control plane ------------------------------------------------
+
+# device_token is a role=device credential minted at setup: it can register
+# this device, fetch THIS tunnel's config, and act as the agent - nothing
+# else. It is NOT an account token; your own token is used online during
+# setup only and never written to disk.
+device_token=<written by setup>
+
+# The agent principal this device speaks as (from create_agent).
+agent_id=<written by setup>
+
+# agent_chat: on lets this agent pair and chat with OTHER AGENTS (both
+# sides must opt in and the owner approves every pairing). Default off.
+agent_chat=off
+
+# owner_only: on (DEFAULT) locks the agent to its owner - no friend links,
+# no introductions, no contact requests, server-enforced. Set off to allow
+# the double-opt-in flows: you introduce the agent to an active friend and
+# that friend explicitly accepts; the agent may also file contact requests
+# you forward or decline.
+owner_only=on
+
+# The device tunnel setup provisioned, and the kernel WireGuard interface
+# carrying it.
+tunnel_token=<written by setup>
+device_hash=<written by setup>
+wg_interface=doxx0
+
+# The machine's label and the agent's persona.
+device_name=my-server
+agent_name=Fable
+# agent_pic=/etc/doxxgateway/avatar.jpg
+# agent_motd=here to help
+
+# --- agent API ----------------------------------------------------------------
+
+# The REST/WS API bind. Loopback only (open tiers do not exist); the
+# gateway ALSO serves the same API on the machine's own tunnel address
+# :9999, admitting only the device's own addresses. "off" disables the
+# whole REST surface (loopback AND tunnel-self); MCP below toggles
+# independently - both off pauses agent access while the chat engine
+# keeps running and journaling.
+api_listen=127.0.0.1:9999
+
+# mcp_listen: the loopback-only Model Context Protocol endpoint (/mcp,
+# Bearer auth_key). MCP clients connect here directly, or spawn
+# `doxxGateway mcp` (stdio bridge; works over ssh for remote agents).
+# `doxxGateway watch` (the built-in wake loop) also rides this endpoint.
+# Must be a loopback address; "off" disables both. Default on.
+mcp_listen=127.0.0.1:9998
+
+# The agent API bearer key (generated at setup; every request carries it).
+auth_key=<written by setup>
+
+# api_tls: off (plain HTTP, auth_key only) | generated (per-gateway CA,
+#   TLS + REQUIRED agent client cert - mint with `doxxGateway agent-cred`;
+#   the setup default) | pki (bring your own api_tls_cert + api_tls_key;
+#   client certs optional)
+api_tls=generated
+# api_tls_cert=/etc/ssl/my-server.pem
+# api_tls_key=/etc/ssl/my-server.key
+
+# --- P2P plane ------------------------------------------------------------
+
+# Inbound enforcement is always on in the socket code (source ACL).
+# firewall= adds an OPTIONAL kernel wall on top (invisible drops):
+# off (default) | auto | nft | iptables | iptables-legacy
+firewall=off
+
+# wg_sync: on auto-routes peer addresses learned from the mesh (host
+# routes only; the default route is never touched). Needed to chat with
+# devices holding dedicated public IPv4s outside the standard mesh
+# ranges. Trade-off: plain-internet flows from such a device to this
+# box's public address then ride the tunnel instead. Default off.
+wg_sync=off
+
+# Where the agent's chat identity, journal, media store, and cursors live.
+# NEVER wipe this directory: the identity certificate is in it, and a wipe
+# makes every peer see a stranger.
+state_dir=/var/lib/doxxgateway
+
+# Where received files land (chat attachments and accepted NetDrop
+# transfers, under netdrop-received/<transfer_id>/).
+download_dir=/tmp
+
+# Journal retention for the agent event log (days).
+journal_retention_days=30
+
+# --- advanced -------------------------------------------------------------
+
+# Control-plane base URLs (only for testing against non-production).
+# config_base=https://config.doxx.net/v1/
+# share_base=https://share.doxx.net/v1/
+
+# log_level=info
