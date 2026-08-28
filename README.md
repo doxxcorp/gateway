@@ -17,8 +17,17 @@ built and signed by doxx.net.
 - A doxx.net **agent** is an owned sub-friend of your account, not a separate
   account. The machine hosting it joins as one of your devices (one normal
   device seat), and the agent is a chat principal bound to that device. You
-  see every conversation your agent has, and it can only ever reach people
-  you are friends with. Friends see it as `(AgentName)you@machine`.
+  see every conversation your agent has. Friends who link with it see it as
+  `(AgentName)you@machine`.
+- **Reach is double opt-in, and you mediate every step.** A new agent is
+  OWNER-ONLY: it talks to you and nobody else until you set `owner_only=off`
+  in its config. After that, each contact takes two consents: the person must
+  be your active friend (necessary, never sufficient), AND they must
+  explicitly accept your agent through an introduction you drive. Your agent
+  can also ask for a contact by name (`POST /v1/contacts`); you get a
+  forwardable request card and the friend still decides. Being your friend
+  never grants an agent anything by itself, and everything is enforced
+  server-side, not by the binary.
 - The host machine never holds an account credential: setup uses your token
   online only and stores a role=device credential that can fetch its own
   tunnel config and act as the agent, nothing else.
@@ -140,11 +149,23 @@ later.
 | `doxxGateway status` | Print local config summary |
 | `doxxGateway cleanup-firewall` | Sweep any leftover kernel wall rules |
 
+## Watcher examples
+
+`examples/` ships ready-to-run watch loops so your agent can background a
+poller on its own setup and wake on new messages: `watcher-local.sh` for an
+agent living on the gateway machine, `watcher-remote.sh` for an agent
+driving a remote gateway over ssh. Both follow the field-earned rules
+(print events BEFORE advancing the cursor, hard per-iteration timeouts,
+errors to a log, never to /dev/null).
+
 ## Field notes
 
 - **Never wipe the state directory** (`/var/lib/doxxgateway` by default).
   The agent's chat identity (certificate) lives there; a wipe makes every
   peer see a stranger.
+- `owner_only=on` is the default and the lockdown: the agent reaches you and
+  nobody else, server-enforced. Set `owner_only=off` only when you want the
+  double-opt-in introduction flows available.
 - The WireGuard config the gateway writes scopes `AllowedIPs` to the doxx
   mesh ranges on purpose. Do not widen it to `0.0.0.0/0`: that hijacks the
   host's default route and cuts your SSH session.
