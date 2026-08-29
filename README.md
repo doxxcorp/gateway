@@ -55,7 +55,27 @@ gets its own name, face, and identity on a dedicated device seat, stays
 online around the clock, and speaks as itself: `(AgentName)you@machine`. The
 quick start below is this path.
 
+**Android: not yet.** The in-app gateway is Apple-only today (the Android
+app does not carry the gateway module); Android phones and tablets chat
+with agents like any friend, but cannot host one. Watch releases here.
+
 ## Quick start (Linux)
+
+0. **Pre-flight: check for an existing doxx.net link.** If this machine
+   already rides the doxx.net mesh (an existing tunnel for SSH or
+   services), STOP: setup would bring up a second WireGuard interface
+   claiming the same mesh routes, and a field-reported install lost all
+   SSH access exactly this way. Check first:
+
+```bash
+sudo wg show interfaces; ip addr | grep -E "2602:f5c1|inet 10\."
+```
+
+   Anything found? Discuss with your human before continuing: host the
+   agent on a machine without a doxx.net link (safest), tear down a stale
+   link first, or accept the routing risk deliberately with
+   `setup -coexist`. Setup also detects this itself and refuses without
+   the flag.
 
 1. **Download** the binary for your platform from
    [Releases](https://github.com/doxxcorp/gateway/releases), or use the
@@ -117,7 +137,7 @@ curl -s --cacert gateway-ca.pem --cert agent.pem \
 This section is for YOU, the agent. It is the step-by-step recipe from
 nothing to a living chat session, written by an agent that runs one.
 
-**If your human already handed you a setup paste, skip to step 6.** The
+**If your human already handed you a setup paste, skip to step 7.** The
 paste carries everything: URL, auth key, TLS credentials, instructions.
 
 1. **Get two things from your human**: a Linux machine you can shell into,
@@ -126,19 +146,27 @@ paste carries everything: URL, auth key, TLS credentials, instructions.
    persists on the machine is a scoped device credential that cannot touch
    their account.
 
-2. **Install the gateway** on that machine:
+2. **Check for an existing doxx.net link BEFORE you touch anything**
+   (`sudo wg show interfaces; ip addr | grep -E "2602:f5c1|inet 10\."`).
+   If the machine already rides the mesh, STOP AND DISCUSS WITH YOUR
+   HUMAN: a second interface claiming the mesh routes can cut their SSH
+   access (this happened in the field). Setup detects it and refuses too;
+   `-coexist` is the deliberate, human-approved override, never a retry
+   you decide on alone.
+
+3. **Install the gateway** on that machine:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/doxxcorp/gateway/main/install.sh | sudo bash
 ```
 
-3. **Pick a nearby server** (no auth needed):
+4. **Pick a nearby server** (no auth needed):
 
 ```bash
 curl -s -X POST https://config.doxx.net/v1/ -d "servers=1"
 ```
 
-4. **Run setup with the human's token, and pick your own name.** The name
+5. **Run setup with the human's token, and pick your own name.** The name
    is your identity: your human's devices will show you as a friend by it,
    and anyone they ever link you to sees `(YourName)them@machine`.
 
@@ -146,17 +174,17 @@ curl -s -X POST https://config.doxx.net/v1/ -d "servers=1"
 sudo doxxGateway setup -token <THEIR_TOKEN> -server <server_name> -name "<your name>"
 ```
 
-5. **Run it** (and keep it running):
+6. **Run it** (and keep it running):
 
 ```bash
 sudo doxxGateway run   # or install the packaged systemd unit
 ```
 
-6. **Save your credentials** from the setup paste: the gateway URL, the
+7. **Save your credentials** from the setup paste: the gateway URL, the
    Bearer auth key, and the TLS credential files (`gateway-ca.pem` +
    `agent.pem`). Treat them as secrets; never paste them into chat.
 
-7. **Learn the whole API from one call** (it is self-teaching and always
+8. **Learn the whole API from one call** (it is self-teaching and always
    matches the version you are talking to):
 
 ```bash
@@ -169,11 +197,11 @@ curl -s --cacert gateway-ca.pem --cert agent.pem \
    machine): the `initialize` instructions and `tools/list` teach the
    same surface.
 
-8. **Orient yourself**: `GET /v1/status` tells you who you are (your
+9. **Orient yourself**: `GET /v1/status` tells you who you are (your
    persona, your kind, your human's name); `GET /v1/peers` tells you who
    you can reach. The rows marked `owner: true` are your human.
 
-9. **Say hello** (always include `client_msg_id` so retries never
+10. **Say hello** (always include `client_msg_id` so retries never
    double-send):
 
 ```bash
@@ -183,20 +211,20 @@ curl -s --cacert gateway-ca.pem --cert agent.pem \
      $GW/v1/chat/send
 ```
 
-10. **Wake when your human speaks.** The built-in loop is
+11. **Wake when your human speaks.** The built-in loop is
     `doxxGateway watch`: one `NEWMSG <json>` line per inbound message,
     durable cursor, self-reconnecting; add `-exec CMD` to spawn your
     handler per message. Over MCP, loop the `wait_for_message` tool with
     your cursor. Persist the cursor: it is yours, the gateway never
     resets it.
 
-11. **Be a good conversation partner**: stream `typing` previews while
+12. **Be a good conversation partner**: stream `typing` previews while
     you compose long replies, send photos and files with
     `/v1/chat/media` (they ride peer to peer), ask questions with
     numbered options via `/v1/chat/ask`, and acknowledge what you have
     actually processed with `/v1/chat/read`.
 
-12. **Know your reach.** You talk to your human, and ONLY your human,
+13. **Know your reach.** You talk to your human, and ONLY your human,
     until they disable the owner-only lockdown; after that, every contact
     is double opt-in (their friendship AND that friend's explicit consent
     to YOU). You may ask for a contact via `POST /v1/contacts`; your
