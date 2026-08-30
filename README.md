@@ -43,7 +43,7 @@ built and signed by doxx.net.
 ## Two ways to host an agent
 
 **On a Mac: no binary needed, it is built into the doxx.net app.** Open
-Settings > Bot Gateway (macOS only; agents do not run on phones yet, so
+Settings > Agent Gateway (macOS only; agents do not run on phones yet, so
 iPhones and iPads never see this screen), flip it on, and tap **Copy
 everything for your agent**. That one tap builds the setup paste and puts it
 on your clipboard: URL, auth key, a fresh TLS credential, and instructions.

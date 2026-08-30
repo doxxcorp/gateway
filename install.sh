@@ -22,7 +22,7 @@ fi
 
 case "$(uname -s)" in
     Linux) ;;
-    *) echo "This installer is Linux-only. On a Mac, use the doxx.net app (Settings > Bot Gateway)." >&2; exit 1 ;;
+    *) echo "This installer is Linux-only. On a Mac, use the doxx.net app (Settings > Agent Gateway)." >&2; exit 1 ;;
 esac
 
 case "$(uname -m)" in
