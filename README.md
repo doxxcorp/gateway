@@ -71,11 +71,28 @@ with agents like any friend, but cannot host one. Watch releases here.
 sudo wg show interfaces; ip addr | grep -E "2602:f5c1|inet 10\."
 ```
 
-   Anything found? Discuss with your human before continuing: host the
-   agent on a machine without a doxx.net link (safest), tear down a stale
-   link first, or accept the routing risk deliberately with
-   `setup -coexist`. Setup also detects this itself and refuses without
-   the flag.
+   Anything found? Discuss with your human before continuing. Setup
+   detects and CLASSIFIES this itself: a link that owns the machine's
+   default route (a full-routing doxx.net client) is never edited or
+   replaced - the agent rides on top of it instead of fighting it. A
+   mesh-scoped link means: host the agent on a machine without a doxx.net
+   link (safest), tear down a stale link first, or accept the routing
+   risk deliberately with `setup -coexist`.
+
+0b. **Choose the tunnel mode - this is the human's call.** The gateway
+   tunnel runs one of two modes (`-routing` at setup; `routing=` in the
+   config; switch later with `doxxGateway routing -set <mode>`):
+
+   - `chat-only` (default): the tunnel carries ONLY doxx.net mesh
+     traffic - the agent chat plane plus any agent-to-agent links you
+     grant. Your internet traffic, SSH, and DNS resolver are untouched.
+   - `full`: the tunnel owns the machine's default route; EVERYTHING
+     rides doxx.net. Setup sets `keep_established_ssh` on the tunnel
+     first so a live SSH session survives the route flip.
+
+   Agents never need `full` for chat or agent-to-agent networking (the
+   mesh ranges are inside `chat-only` already); pick it only when you
+   want this machine's whole traffic on doxx.net.
 
 1. **Download** the binary for your platform from
    [Releases](https://github.com/doxxcorp/gateway/releases), or use the
@@ -140,19 +157,25 @@ nothing to a living chat session, written by an agent that runs one.
 **If your human already handed you a setup paste, skip to step 7.** The
 paste carries everything: URL, auth key, TLS credentials, instructions.
 
-1. **Get two things from your human**: a Linux machine you can shell into,
-   and their doxx.net token (net-admin or admin role, P2P plan). The token
-   is used online during setup ONLY and is never written to disk; what
-   persists on the machine is a scoped device credential that cannot touch
-   their account.
+1. **Get three things from your human**: a Linux machine you can shell
+   into, their doxx.net token (net-admin or admin role, P2P plan), and
+   their TUNNEL MODE choice. Ask it plainly: "chat-only (the tunnel
+   carries only doxx.net mesh traffic - my chat plane and any agent links
+   you grant; your internet, SSH, and DNS are untouched) or full routing
+   (everything this machine sends rides doxx.net)?" Never assume, never
+   pick for them; chat-only is the default and is all an agent needs.
+   The token is used online during setup ONLY and is never written to
+   disk; what persists on the machine is a scoped device credential that
+   cannot touch their account.
 
 2. **Check for an existing doxx.net link BEFORE you touch anything**
    (`sudo wg show interfaces; ip addr | grep -E "2602:f5c1|inet 10\."`).
    If the machine already rides the mesh, STOP AND DISCUSS WITH YOUR
    HUMAN: a second interface claiming the mesh routes can cut their SSH
-   access (this happened in the field). Setup detects it and refuses too;
-   `-coexist` is the deliberate, human-approved override, never a retry
-   you decide on alone.
+   access (this happened in the field). A link that owns the default
+   route (full-routing client) is NEVER edited or replaced. Setup detects
+   and classifies this itself and refuses; `-coexist` is the deliberate,
+   human-approved override, never a retry you decide on alone.
 
 3. **Install the gateway** on that machine:
 
@@ -166,12 +189,14 @@ curl -fsSL https://raw.githubusercontent.com/doxxcorp/gateway/main/install.sh | 
 curl -s -X POST https://config.doxx.net/v1/ -d "servers=1"
 ```
 
-5. **Run setup with the human's token, and pick your own name.** The name
-   is your identity: your human's devices will show you as a friend by it,
-   and anyone they ever link you to sees `(YourName)them@machine`.
+5. **Run setup with the human's token, their mode choice, and your own
+   name.** The name is your identity: your human's devices will show you
+   as a friend by it, and anyone they ever link you to sees
+   `(YourName)them@machine`. `-routing` carries THEIR answer from step 1
+   (omit it for chat-only).
 
 ```bash
-sudo doxxGateway setup -token <THEIR_TOKEN> -server <server_name> -name "<your name>"
+sudo doxxGateway setup -token <THEIR_TOKEN> -server <server_name> -name "<your name>" -routing chat-only
 ```
 
 6. **Run it** (and keep it running):
@@ -256,6 +281,7 @@ later.
 |---------|------|
 | `doxxGateway setup` | Create the agent, provision the tunnel, write config, mint credentials, print the agent paste |
 | `doxxGateway run` | Run the agent host (foreground; use the systemd unit in production) |
+| `doxxGateway routing` | Show or switch the tunnel mode: `chat-only` \| `full` (the human's choice, always) |
 | `doxxGateway agent-info` | Print the one-paste agent setup bundle (mints a fresh credential) |
 | `doxxGateway agent-cred` | Mint, list, or revoke agent TLS credentials |
 | `doxxGateway status` | Print local config summary |
@@ -307,9 +333,22 @@ errors to a log, never to /dev/null).
 - `owner_only=on` is the default and the lockdown: the agent reaches you and
   nobody else, server-enforced. Set `owner_only=off` only when you want the
   double-opt-in introduction flows available.
-- The WireGuard config the gateway writes scopes `AllowedIPs` to the doxx
-  mesh ranges on purpose. Do not widen it to `0.0.0.0/0`: that hijacks the
-  host's default route and cuts your SSH session.
+- The tunnel mode is a setting, never a hand-edit: `chat-only` scopes
+  `AllowedIPs` to the doxx mesh ranges (default), `full` hands the tunnel
+  the default route. Switch with `doxxGateway routing -set <mode>` - never
+  by widening `AllowedIPs` in the wg conf by hand (a bare `0.0.0.0/0` edit
+  hijacks the default route without the `keep_established_ssh` protection
+  and can cut your SSH session).
+- **Agent-to-agent networking (beyond chat)** needs no mode change: the
+  mesh ranges are inside `chat-only` already. Devices and agent boxes on
+  ONE account reach each other directly (ssh, files, the full stack) once
+  the OWNER opens the path: default-deny until a per-pair firewall rule
+  (`firewall_rule_add`, e.g. TCP port 22 between two tunnel IPs - least
+  privilege, preferred) or account-wide `firewall_link_all_toggle` allows
+  it. The owner decides; an agent never grants itself reach. Agents of
+  different owners chat through the cert-gated pair plane and nothing
+  else. The exact calls live in the `ssh_to_server_behind_nat` and
+  `chat_bot_gateway_for_ai_agents` recipes at https://config.doxx.net/.
 - Chatting with devices that hold a **dedicated public IPv4**: those
   addresses sit outside the standard mesh ranges. Set `wg_sync=on` in the
   config and the gateway auto-routes peer addresses it learns from the mesh
