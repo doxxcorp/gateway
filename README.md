@@ -72,16 +72,19 @@ sudo wg show interfaces; ip addr | grep -E "2602:f5c1|inet 10\."
 ```
 
    Anything found? Discuss with your human before continuing. Setup
-   detects and CLASSIFIES this itself: a link that owns the machine's
-   default route (a full-routing doxx.net client) is never edited or
-   replaced - the agent rides on top of it instead of fighting it. A
-   mesh-scoped link means: host the agent on a machine without a doxx.net
-   link (safest), tear down a stale link first, or accept the routing
-   risk deliberately with `setup -coexist`.
+   detects and CLASSIFIES this itself, and an existing link is never
+   edited or replaced: `setup -ride` binds the agent to that link's
+   device seat instead (no second interface, no new device seat, the
+   link stays exactly as it is). The alternatives: host the agent on a
+   machine without a doxx.net link, tear down a stale link first, or
+   force a second interface deliberately with `setup -coexist` (strongly
+   discouraged beside a link that owns the default route).
 
 0b. **Choose the tunnel mode - this is the human's call.** The gateway
-   tunnel runs one of two modes (`-routing` at setup; `routing=` in the
-   config; switch later with `doxxGateway routing -set <mode>`):
+   tunnel runs one of two modes. `-routing` at setup seeds the `routing=`
+   key in the config file, and the config file is the interface: edit the
+   key and restart the gateway to switch (run re-renders the wg conf to
+   match at start):
 
    - `chat-only` (default): the tunnel carries ONLY doxx.net mesh
      traffic - the agent chat plane plus any agent-to-agent links you
@@ -172,10 +175,12 @@ paste carries everything: URL, auth key, TLS credentials, instructions.
    (`sudo wg show interfaces; ip addr | grep -E "2602:f5c1|inet 10\."`).
    If the machine already rides the mesh, STOP AND DISCUSS WITH YOUR
    HUMAN: a second interface claiming the mesh routes can cut their SSH
-   access (this happened in the field). A link that owns the default
-   route (full-routing client) is NEVER edited or replaced. Setup detects
-   and classifies this itself and refuses; `-coexist` is the deliberate,
-   human-approved override, never a retry you decide on alone.
+   access (this happened in the field). An existing link is NEVER edited
+   or replaced: with your human's go-ahead, `setup -ride` binds you to
+   that link's device seat instead (no second interface, no new seat,
+   `-server` not needed). Setup detects and classifies this itself and
+   refuses; `-ride` and `-coexist` are deliberate, human-approved
+   choices, never a retry you decide on alone.
 
 3. **Install the gateway** on that machine:
 
@@ -281,7 +286,6 @@ later.
 |---------|------|
 | `doxxGateway setup` | Create the agent, provision the tunnel, write config, mint credentials, print the agent paste |
 | `doxxGateway run` | Run the agent host (foreground; use the systemd unit in production) |
-| `doxxGateway routing` | Show or switch the tunnel mode: `chat-only` \| `full` (the human's choice, always) |
 | `doxxGateway agent-info` | Print the one-paste agent setup bundle (mints a fresh credential) |
 | `doxxGateway agent-cred` | Mint, list, or revoke agent TLS credentials |
 | `doxxGateway status` | Print local config summary |
@@ -333,12 +337,18 @@ errors to a log, never to /dev/null).
 - `owner_only=on` is the default and the lockdown: the agent reaches you and
   nobody else, server-enforced. Set `owner_only=off` only when you want the
   double-opt-in introduction flows available.
-- The tunnel mode is a setting, never a hand-edit: `chat-only` scopes
-  `AllowedIPs` to the doxx mesh ranges (default), `full` hands the tunnel
-  the default route. Switch with `doxxGateway routing -set <mode>` - never
-  by widening `AllowedIPs` in the wg conf by hand (a bare `0.0.0.0/0` edit
-  hijacks the default route without the `keep_established_ssh` protection
-  and can cut your SSH session).
+- The tunnel mode is a config setting, never a hand-edit of the wg conf:
+  `chat-only` scopes `AllowedIPs` to the doxx mesh ranges (default),
+  `full` hands the tunnel the default route. Switch by editing `routing=`
+  in `doxxGateway.conf` and restarting the gateway (run re-renders the wg
+  conf to match) - never by widening `AllowedIPs` by hand (a bare
+  `0.0.0.0/0` edit flips the default route without the
+  `keep_established_ssh` protection and can cut your SSH session).
+- **Machine already on doxx.net?** `setup -ride` hosts the agent on the
+  existing link's device seat (no second interface, no new device seat,
+  the link is never touched). A ride-on-top gateway has no tunnel mode of
+  its own: the routing reconcile never runs there, and the ridden link's
+  routing stays whatever its owner configured.
 - **Agent-to-agent networking (beyond chat)** needs no mode change: the
   mesh ranges are inside `chat-only` already. Devices and agent boxes on
   ONE account reach each other directly (ssh, files, the full stack) once
