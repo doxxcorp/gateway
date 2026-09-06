@@ -1,33 +1,85 @@
-# doxxgw-watch.service - agent PRESENCE as a system service.
+# doxxgw-watch.service - agent PRESENCE as a service (hardened).
 #
-# The gateway service (doxxgw.service) makes your agent REACHABLE: it
-# holds the chat seat and journals every message durably. This unit is
-# what makes the agent ANSWER when no interactive session is attached:
-# the built-in wake loop runs forever and spawns your handler once per
-# inbound message (event JSON on stdin; reply via the local API or MCP).
+# The gateway (doxxgateway.service) makes your agent REACHABLE and journals
+# every message. This unit makes it ANSWER when no interactive session is
+# attached: the built-in wake loop runs forever and spawns your handler
+# once per inbound message (event JSON on stdin).
 #
-# Field lesson (2026-09-06): an MCP-configured agent is present only
-# while its session lives. App closed, task finished, laptop asleep -
-# the tunnel still shows connected, and nothing reads or answers. This
-# unit closes that gap.
+# Field lesson (2026-09-06): an MCP-configured agent is present only while
+# its session lives. App closed, task done, laptop asleep - the tunnel
+# still shows connected and nothing answers. This unit closes that gap.
 #
-# Install:
-#   1. put your per-message handler at /usr/local/bin/agent-handler
-#   2. cp doxxgw-watch.service /etc/systemd/system/
-#   3. systemctl enable --now doxxgw-watch
+# SECURITY (field report 2026-09-06): a chat message is UNTRUSTED input,
+# so the handler MUST NOT run as root. This unit runs as a dedicated
+# unprivileged user with a locked-down sandbox. The privileged gateway
+# and this unprivileged worker are deliberately separate processes:
 #
-# No handler yet? Remove the -exec argument and the loop streams NEWMSG
-# lines into the system journal instead (journalctl -fu doxxgw-watch).
+#     doxxgateway.service (root: WireGuard + wall)
+#         |  durable journal
+#         v
+#     doxxgw-watch.service (unprivileged: reads chat, runs the handler)
+#         |  your handler validates input, stages any artifact,
+#         v  and replies over the LOCAL api/mcp with a fixed recipient
+#
+# Setup:
+#   1. sudo useradd --system --home /var/lib/doxxgw-agent --create-home \
+#          --shell /usr/sbin/nologin doxxgw-agent
+#   2. give the worker ONLY the auth key, never the gateway config (which
+#      holds device_token). As root, copy the key out of the config into a
+#      file the agent user alone can read:
+#        sudo sh -c 'sed -n "s/^auth_key=//p" /etc/doxxgateway/doxxGateway.conf \
+#            > /var/lib/doxxgw-agent/auth.key'
+#        sudo chown doxxgw-agent:doxxgw-agent /var/lib/doxxgw-agent/auth.key
+#        sudo chmod 600 /var/lib/doxxgw-agent/auth.key
+#   3. put your per-message handler at /usr/local/bin/agent-handler (owned
+#      root, mode 0755; it reads the event JSON on stdin and replies over
+#      the LOCAL API with a fixed recipient). It runs as the agent user.
+#   4. sudo cp doxxgw-watch.service /etc/systemd/system/
+#   5. sudo systemctl enable --now doxxgw-watch
+#
+# This runs watch in DECOUPLED mode: -mcp-url + -auth-key-file instead of
+# the gateway config, so device_token never reaches the worker. (If your
+# gateway sets mcp_listen to a non-default port, match it in -mcp-url.)
+#
+# No handler yet? Drop the -exec argument and the loop streams NEWMSG
+# lines into the journal (journalctl -fu doxxgw-watch).
+#
+# The cursor is durable and lives under the agent user's home; watch owns
+# it and never rewinds it.
 
 [Unit]
-Description=doxxGateway wake loop (keeps the agent answering)
-After=network-online.target doxxgw.service
-Wants=doxxgw.service
+Description=doxxGateway wake loop (keeps the agent answering, unprivileged)
+After=network-online.target doxxgateway.service
+Wants=doxxgateway.service
 
 [Service]
-ExecStart=/usr/local/bin/doxxGateway watch -exec /usr/local/bin/agent-handler
+# Untrusted input never touches root.
+User=doxxgw-agent
+Group=doxxgw-agent
+ExecStart=/usr/local/bin/doxxGateway watch \
+    -mcp-url http://127.0.0.1:9998/mcp \
+    -auth-key-file /var/lib/doxxgw-agent/auth.key \
+    -cursor-file /var/lib/doxxgw-agent/agent-cursor \
+    -exec /usr/local/bin/agent-handler
 Restart=always
 RestartSec=5
+
+# --- sandbox (field report 2026-09-06) ---
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/doxxgw-agent
+PrivateTmp=true
+PrivateDevices=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

@@ -34,6 +34,26 @@ tunnel_token=<written by setup>
 device_hash=<written by setup>
 wg_interface=doxx0
 
+# routing: the tunnel mode, the HUMAN's choice at setup (-routing). The
+# config file is the interface: edit this key and restart the gateway to
+# switch (run re-renders the wg conf to match at start).
+#   chat-only (DEFAULT) scopes AllowedIPs to the doxx mesh ranges - the
+#     tunnel carries ONLY doxx.net mesh traffic (the chat plane + any
+#     agent-to-agent links the owner grants); internet, SSH, and the
+#     resolver stay untouched.
+#   full hands the tunnel the machine's default route: EVERYTHING rides
+#     doxx.net.
+# Only wg confs doxxGateway generated are ever re-rendered; a customized
+# wg file is left alone (reconcile it by hand).
+routing=chat-only
+
+# ride_on_top: set by `setup -ride` when the agent binds to the machine's
+# EXISTING doxx.net link instead of provisioning its own tunnel (shares
+# that link's device seat; no second interface). When on, the ridden link
+# is never edited and routing= does not apply (the link's mode is its
+# own). You do not set this by hand; setup writes it.
+# ride_on_top=off
+
 # The machine's label and the agent's persona.
 device_name=my-server
 agent_name=Fable

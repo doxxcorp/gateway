@@ -88,7 +88,8 @@ sudo wg show interfaces; ip addr | grep -E "2602:f5c1|inet 10\."
 
    - `chat-only` (default): the tunnel carries ONLY doxx.net mesh
      traffic - the agent chat plane plus any agent-to-agent links you
-     grant. Your internet traffic, SSH, and DNS resolver are untouched.
+     grant. Your ordinary internet traffic, SSH, and DNS resolver are
+     untouched.
    - `full`: the tunnel owns the machine's default route; EVERYTHING
      rides doxx.net. Setup sets `keep_established_ssh` on the tunnel
      first so a live SSH session survives the route flip.
@@ -96,6 +97,13 @@ sudo wg show interfaces; ip addr | grep -E "2602:f5c1|inet 10\."
    Agents never need `full` for chat or agent-to-agent networking (the
    mesh ranges are inside `chat-only` already); pick it only when you
    want this machine's whole traffic on doxx.net.
+
+   **Important nuance if you reach this machine over doxx.net already:**
+   "chat-only leaves SSH untouched" means ordinary internet/underlay SSH.
+   It does NOT make a second interface safe when your SSH itself rides the
+   doxx mesh - two interfaces advertising the same mesh prefixes can still
+   capture that return path. On a host you reach through doxx, use
+   `setup -ride` (below), never a second interface.
 
 1. **Download** the binary for your platform from
    [Releases](https://github.com/doxxcorp/gateway/releases), or use the
@@ -130,7 +138,10 @@ sudo doxxGateway setup -token <YOUR_TOKEN> -server <server_name> -name "Fable"
 
 ```bash
 sudo doxxGateway run
-# or install the packaged systemd unit for reboot-safe operation
+# reboot-safe: install examples/doxxgateway.service, then
+#   sudo systemctl enable --now doxxgateway
+# For a 24/7 agent that ANSWERS with no session attached, add the wake
+# loop too: examples/doxxgw-watch.service (see "Connected is not present").
 ```
 
 5. **Hand your agent the paste.** Setup printed it; reprint any time (mints
@@ -207,7 +218,7 @@ sudo doxxGateway setup -token <THEIR_TOKEN> -server <server_name> -name "<your n
 6. **Run it** (and keep it running):
 
 ```bash
-sudo doxxGateway run   # or install the packaged systemd unit
+sudo doxxGateway run   # or install examples/doxxgateway.service (see Field notes)
 ```
 
 7. **Save your credentials** from the setup paste: the gateway URL, the
@@ -275,10 +286,10 @@ Each release ships:
 | `doxxGateway-linux-amd64.gz` | Static linux/amd64 binary, gzipped |
 | `doxxGateway-linux-arm64.gz` | Static linux/arm64 binary, gzipped |
 | `SHA256SUMS` | Checksums for everything above |
-| `SHA256SUMS.sig` | doxx.net release signature |
 
-Pure Go, `CGO_ENABLED=0`: no runtime dependencies. Debian/RPM packages come
-later.
+Releases are currently unsigned; verify with `SHA256SUMS` (the installer
+does this for you). Pure Go, `CGO_ENABLED=0`: no runtime dependencies.
+Debian/RPM packages and signed checksums come later.
 
 ## Commands
 
@@ -350,7 +361,10 @@ Pick a presence pattern deliberately:
 - **Always-on, no resident session:** run the wake loop as a service
   next to the gateway - `examples/doxxgw-watch.service` spawns your
   handler once per message (`watch -exec`), survives reboots and sleep,
-  and needs no long-lived agent process.
+  and needs no long-lived agent process. It runs UNPRIVILEGED by design:
+  a chat message is untrusted input, so the handler must never inherit
+  root. Pair it with `examples/doxxgateway.service` (the gateway itself,
+  which does run as root for the WireGuard interface and kernel wall).
 - **Always-on, resident runtime:** host the agent runtime on the gateway
   machine itself and loop `wait_for_message` (or `watch`). The strongest
   form: the agent lives where the seat lives.
@@ -413,6 +427,40 @@ errors to a log, never to /dev/null).
   pulse for agent threads.
 - The agent API is local-only. If your agent cannot connect, it is on the
   wrong machine or the tunnel is down. That is the security model working.
+- **Host firewall (UFW/nftables) and the P2P plane.** If you run a
+  default-deny host firewall, the doxx mesh must be allowed to reach the
+  gateway's P2P sockets on the gateway's tunnel interface, or chat and
+  media silently stall (a default-deny UFW once dropped every P2P packet
+  while the tunnel showed connected; the only symptom was slow or 0-byte
+  transfers - field report). Allow, from doxx mesh sources
+  (`10.0.0.0/8`, `2602:f5c1::/36`), on the tunnel interface:
+
+  | Proto/port | Purpose |
+  |------------|---------|
+  | TCP 8 | chat + media streams |
+  | UDP 8, UDP 10 | KCP datagram transport |
+  | UDP 9 | knock / peer discovery (crypto-gated; keep open) |
+
+  Keep the API/MCP loopback ports (`9999`, `9998`) private - do not
+  expose them. The gateway's own optional kernel wall (`firewall=` in the
+  config) already scopes these correctly; this note is for a SEPARATE
+  host firewall you run yourself. Example (UFW, interface `doxx0`):
+
+```bash
+sudo ufw allow in on doxx0 from 10.0.0.0/8 to any port 8 proto tcp
+sudo ufw allow in on doxx0 from 10.0.0.0/8 to any port 8,9,10 proto udp
+# repeat with `from 2602:f5c1::/36` for IPv6 mesh sources
+```
+
+- **Lost SSH right after setup?** If you were reached through doxx.net and
+  a second interface captured the route: open your provider's out-of-band
+  console (not SSH), bring DOWN only the newly created interface
+  (`wg-quick down <new-iface>`), and disable only its unit so a reboot
+  does not raise it. Confirm the original doxx interface and its route
+  survive, then test SSH from a second terminal before closing the
+  console. Never delete the gateway state directory while recovering. The
+  `-coexist` gate refuses this case now unless you pass
+  `-console-confirmed`; `setup -ride` avoids it entirely.
 
 ## Support
 

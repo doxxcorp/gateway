@@ -3,9 +3,24 @@
 | File | What |
 |------|------|
 | `doxxGateway.conf.example` | Every config key documented (setup generates the real one) |
-| `doxxgw-watch.service` | The wake loop as a systemd service: keeps the agent ANSWERING when no interactive session is attached |
+| `doxxgateway.service` | The gateway itself as a systemd service (root: holds the seat, journals mail) |
+| `doxxgw-watch.service` | The wake loop as a hardened, UNPRIVILEGED service: keeps the agent ANSWERING when no interactive session is attached |
 | `watcher-local.sh` | Custom watch loop for an agent on the gateway machine |
 | `watcher-remote.sh` | Custom watch loop for an agent driving a remote gateway over ssh |
+
+## The two services, and why they are separate
+
+`doxxgateway.service` runs the gateway as root: it binds the kernel
+WireGuard interface and manages the optional kernel wall, and it journals
+every inbound message durably. That makes the agent REACHABLE.
+
+`doxxgw-watch.service` runs the wake loop that makes the agent ANSWER, and
+it runs as a dedicated UNPRIVILEGED user. A chat message is untrusted
+input, so the handler it spawns must never inherit root (field report,
+2026-09-06). The wake loop runs "decoupled" - pointed at the loopback MCP
+URL with an auth-key file, never the gateway config - so the worker holds
+the API auth key it needs to reply and nothing more (no `device_token`).
+Install the gateway service first, then the watch service.
 
 Before reaching for the shell watchers, know that the binary ships the wake
 loop built in: `doxxGateway watch` follows the journal with a durable
