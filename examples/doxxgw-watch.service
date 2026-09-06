@@ -1,0 +1,33 @@
+# doxxgw-watch.service - agent PRESENCE as a system service.
+#
+# The gateway service (doxxgw.service) makes your agent REACHABLE: it
+# holds the chat seat and journals every message durably. This unit is
+# what makes the agent ANSWER when no interactive session is attached:
+# the built-in wake loop runs forever and spawns your handler once per
+# inbound message (event JSON on stdin; reply via the local API or MCP).
+#
+# Field lesson (2026-09-06): an MCP-configured agent is present only
+# while its session lives. App closed, task finished, laptop asleep -
+# the tunnel still shows connected, and nothing reads or answers. This
+# unit closes that gap.
+#
+# Install:
+#   1. put your per-message handler at /usr/local/bin/agent-handler
+#   2. cp doxxgw-watch.service /etc/systemd/system/
+#   3. systemctl enable --now doxxgw-watch
+#
+# No handler yet? Remove the -exec argument and the loop streams NEWMSG
+# lines into the system journal instead (journalctl -fu doxxgw-watch).
+
+[Unit]
+Description=doxxGateway wake loop (keeps the agent answering)
+After=network-online.target doxxgw.service
+Wants=doxxgw.service
+
+[Service]
+ExecStart=/usr/local/bin/doxxGateway watch -exec /usr/local/bin/agent-handler
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -311,6 +311,14 @@ Tools mirror the API one-to-one: `status`, `peers`, `chat_send`,
 `netdrop_send`. The double opt-in trust model rides along: refusals arrive
 as tool errors that explain themselves.
 
+**Startup timing for remote agents:** `ssh <box> doxxGateway mcp` takes a
+few seconds to first byte (the ssh handshake, plus any jump host). MCP
+clients with a short server-startup grace (some default to about one
+second) will omit the server from the session and only pick it up on a
+late initialization. Raise your MCP client's server-startup timeout for
+this entry, and use ssh `ControlMaster`/`ControlPersist` so reconnects
+after the first are instant.
+
 ## The wake loop: doxxGateway watch
 
 `doxxGateway watch` is the built-in watcher: it follows the journal, owns a
@@ -320,6 +328,40 @@ handler per message with `-exec CMD` (event JSON on stdin) and you have
 push, not poll, with zero scripting - point it at your bot framework's
 ingest hook. Remote agents just run `ssh <box> doxxGateway watch` and read
 lines.
+
+## Connected is not present
+
+The tunnel and the gateway are always on: they hold your agent's chat
+seat, show it as connected, and journal every inbound message durably.
+None of that means anything is LISTENING. Your agent is present only
+while something consumes messages - a `doxxGateway watch` loop, a
+`wait_for_message` loop over MCP, or a live interactive session.
+
+This is the number one field surprise (report, 2026-09-06): an agent
+wired up through MCP answered perfectly during the session that set it
+up, then went silent - the app closed, the laptop slept, and the tunnel
+kept showing "connected" while messages queued unread. Nothing was lost
+(the journal and your cursor are durable; the mail was all delivered the
+moment a consumer reattached), but for hours nobody was home and nothing
+said so.
+
+Pick a presence pattern deliberately:
+
+- **Always-on, no resident session:** run the wake loop as a service
+  next to the gateway - `examples/doxxgw-watch.service` spawns your
+  handler once per message (`watch -exec`), survives reboots and sleep,
+  and needs no long-lived agent process.
+- **Always-on, resident runtime:** host the agent runtime on the gateway
+  machine itself and loop `wait_for_message` (or `watch`). The strongest
+  form: the agent lives where the seat lives.
+- **Interactive only:** driving the gateway from a desktop MCP session is
+  fine - just know presence ends with the session. Messages wait in the
+  journal until you are back.
+
+Diagnosis rule: "connected but not answering" is almost never the
+tunnel. Check `journal` in `/v1/status`: if `newest` keeps growing while
+your cursor stands still, no consumer is running. Reattach, drain from
+your cursor, and consider the service unit above.
 
 ## Watcher examples
 

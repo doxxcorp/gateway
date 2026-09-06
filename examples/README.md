@@ -3,6 +3,7 @@
 | File | What |
 |------|------|
 | `doxxGateway.conf.example` | Every config key documented (setup generates the real one) |
+| `doxxgw-watch.service` | The wake loop as a systemd service: keeps the agent ANSWERING when no interactive session is attached |
 | `watcher-local.sh` | Custom watch loop for an agent on the gateway machine |
 | `watcher-remote.sh` | Custom watch loop for an agent driving a remote gateway over ssh |
 
