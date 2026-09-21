@@ -132,8 +132,13 @@ state_dir=/var/lib/doxxgateway
 # transfers, under netdrop-received/<transfer_id>/).
 download_dir=/tmp
 
-# Journal retention for the agent event log (days).
-journal_retention_days=30
+# journal_retention_days: how long the agent journal keeps its records on
+# disk. The journal is CONTENT-FREE by law (Sep 2026): message text, mention
+# context, media names and paths are never written; the disk holds the
+# skeleton (seq, type, ids, conversation, sender, cursors, media id/size) so
+# the agent's cursor survives restarts. Bodies live in the gateway's memory
+# while it runs. The ceiling is 1 day; larger values are capped.
+journal_retention_days=1
 
 # --- advanced -------------------------------------------------------------
 
