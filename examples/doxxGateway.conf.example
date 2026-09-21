@@ -71,14 +71,35 @@ agent_name=Fable
 api_listen=127.0.0.1:9999
 
 # mcp_listen: the loopback-only Model Context Protocol endpoint (/mcp,
-# Bearer auth_key). MCP clients connect here directly, or spawn
+# X-Auth-Key API key). MCP clients connect here directly, or spawn
 # `doxxGateway mcp` (stdio bridge; works over ssh for remote agents).
 # `doxxGateway watch` (the built-in wake loop) also rides this endpoint.
 # Must be a loopback address; "off" disables both. Default on.
 mcp_listen=127.0.0.1:9998
 
-# The agent API bearer key (generated at setup; every request carries it).
+# auth_key: the LEGACY gateway-wide API key (generated at setup). Since
+# Sep 2026 every credential minted by `doxxGateway agent-cred -mint` carries
+# its OWN API key bound to its certificate (X-Auth-Key header; there is no
+# gateway-wide key on the app gateways any more). This key only ever unlocks
+# the one principal this box hosts; prefer per-credential keys.
 auth_key=<written by setup>
+
+# hooks_listen: the webhook-receiver surface on TCP 8888 of the tunnel
+# addresses (POST /v1/hooks/<hook_id>, mTLS + the receiver's API key), for
+# a box whose principal is a webhook receiver (create_agent kind=webhook).
+# off (default) | self (this machine only) | mesh (any doxx.net client may
+# deliver; the kernel wall opens 8888 on the wg interface). Agents are
+# refused there (403); the agent API stays on 9999.
+hooks_listen=off
+
+# group_delivery: what the agent's journal receives from DoxxChat groups
+# its owner added it to. mention (default): only messages that @mention the
+# agent, as type=mention events carrying the 3 prior messages as context
+# (GET /v1/chat/history?conv=grp:<gid> serves more). all: every post.
+# Posting is gated by the group's agent_activation (mention = only inside
+# the window an @mention opens; always = any time), a 5-hop agent budget
+# and the 1/3s, 60/h rate limits.
+group_delivery=mention
 
 # api_tls: off (plain HTTP, auth_key only) | generated (per-gateway CA,
 #   TLS + REQUIRED agent client cert - mint with `doxxGateway agent-cred`;
