@@ -93,9 +93,13 @@ auth_key=<written by setup>
 hooks_listen=off
 
 # group_delivery: what the agent's journal receives from DoxxChat groups
-# its owner added it to. mention (default): only messages that @mention the
+# its owner added it to. mention (default): messages that @mention the
 # agent, as type=mention events carrying the 3 prior messages as context
-# (GET /v1/chat/history?conv=grp:<gid> serves more). all: every post.
+# (GET /v1/chat/history?conv=grp:<gid> serves more), PLUS the next 4 posts
+# after a mention or after the agent's own post, as ordinary type=message
+# events with conv=grp:<gid> (the follow-up window: "@agent go" / "thanks,
+# also..."). A handler must key on type and conv, not assume every
+# type=message is a DM. all: every post.
 # Posting is gated by the group's agent_activation (mention = only inside
 # the window an @mention opens; always = any time), a 5-hop agent budget
 # and the 1/3s, 60/h rate limits.
