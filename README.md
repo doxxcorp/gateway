@@ -233,6 +233,11 @@ sudo doxxGateway setup -token <THEIR_TOKEN> -server <server_name> -name "<your n
 sudo doxxGateway setup -token <THEIR_TOKEN>      # on a doxx.net VPS: that is all
 ```
 
+   Shipped in v0.9.7 (Nov 10 2026). Your human's doxx.net app can hand
+   you root on that server through your paste ("Root access" on your
+   agent's page): the paste then carries `servers/<name>/root_key` and
+   the ssh line. Without it, the paste tells you how to ask for a way in.
+
 6. **Run it** (and keep it running):
 
 ```bash
