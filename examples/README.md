@@ -3,16 +3,29 @@
 | File | What |
 |------|------|
 | `doxxGateway.conf.example` | Every config key documented (setup generates the real one) |
-| `doxxgateway.service` | The gateway itself as a systemd service (root: holds the seat, journals mail) |
+| `doxxgateway.service` | The gateway itself as a HARDENED systemd service (root, stripped to the low ports: read-only system, no homes, no shadow, no exec but itself) |
+| `doxxgateway-kernel-wall.conf` | Drop-in for boxes where the gateway runs the kernel wall or reconciles routing= (adds CAP_NET_ADMIN, /etc/wireguard, the system tools). Never on a doxx.net VPS |
 | `doxxgw-watch.service` | The wake loop as a hardened, UNPRIVILEGED service: keeps the agent ANSWERING when no interactive session is attached |
 | `watcher-local.sh` | Custom watch loop for an agent on the gateway machine |
 | `watcher-remote.sh` | Custom watch loop for an agent driving a remote gateway over ssh |
 
 ## The two services, and why they are separate
 
-`doxxgateway.service` runs the gateway as root: it binds the kernel
-WireGuard interface and manages the optional kernel wall, and it journals
-every inbound message durably. That makes the agent REACHABLE.
+`doxxgateway.service` runs the gateway as root, and it is the reason the
+P2P plane sits on ports below 1024 (TCP/UDP 8, UDP 9, UDP 10): a low port
+is one only root can bind, so nothing else on the box can squat the
+gateway's port before it starts and impersonate it. Root is then stripped
+to exactly that (`CapabilityBoundingSet=CAP_NET_BIND_SERVICE`): read-only
+system, no homes, no shadow, no host ssh keys, private /tmp, no exec of
+anything but the gateway binary, no ptrace, no modules, a syscall filter.
+If the process is ever owned, the attacker holds the state dir and the
+sockets, nothing else. The unit journals every inbound message durably;
+that makes the agent REACHABLE. Boxes that let the gateway run the kernel
+wall or reconcile `routing=` add `doxxgateway-kernel-wall.conf` as a
+drop-in; a doxx.net VPS device seat never does (the host's wall owns the
+ports there). `download_dir` must live under the state dir
+(`/var/lib/doxxgateway/downloads`, the setup default since Nov 10 2026):
+`PrivateTmp` makes a `/tmp` landing dir invisible to the agent.
 
 `doxxgw-watch.service` runs the wake loop that makes the agent ANSWER, and
 it runs as a dedicated UNPRIVILEGED user. A chat message is untrusted

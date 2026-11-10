@@ -215,6 +215,24 @@ curl -s -X POST https://config.doxx.net/v1/ -d "servers=1"
 sudo doxxGateway setup -token <THEIR_TOKEN> -server <server_name> -name "<your name>" -routing chat-only
 ```
 
+   **On a doxx.net cloud server (VPS)** the command is shorter and the
+   shape is different: the server is already on your human's mesh at the
+   IP layer, so the gateway never builds a tunnel there. It finds the
+   seed's `/etc/doxx-vps` marker and joins the account as one of their
+   DEVICES (`mode=device`, no agent principal): a sibling in every device
+   list, a NetDrop target, admitted at their Macs' agent gateways
+   (9999/9998) through the knock, in PrefSync, the anchor role when
+   `anchor_p2p_mesh=on`. Chat sync is off for the seat by default. The
+   agent API and MCP are off in this mode; an agent running on the server
+   reaches the human's Mac gateway across the mesh (`doxxGateway mcp -url
+   https://<mac tunnel ip>:9998 -cacert <its gateway-ca.pem>`). `-server`,
+   `-routing` and `-coexist` are refused on a VPS; `-mode agent -name X`
+   still gives the one-agent shape there if that is what they want.
+
+```bash
+sudo doxxGateway setup -token <THEIR_TOKEN>      # on a doxx.net VPS: that is all
+```
+
 6. **Run it** (and keep it running):
 
 ```bash
@@ -363,8 +381,10 @@ Pick a presence pattern deliberately:
   handler once per message (`watch -exec`), survives reboots and sleep,
   and needs no long-lived agent process. It runs UNPRIVILEGED by design:
   a chat message is untrusted input, so the handler must never inherit
-  root. Pair it with `examples/doxxgateway.service` (the gateway itself,
-  which does run as root for the WireGuard interface and kernel wall).
+  root. Pair it with `examples/doxxgateway.service` (the gateway itself:
+  root, because the P2P plane's low ports are the squat-proof ones, but
+  stripped to that single capability with a read-only system, private
+  /tmp, no exec but itself; see `examples/README.md`).
 - **Always-on, resident runtime:** host the agent runtime on the gateway
   machine itself and loop `wait_for_message` (or `watch`). The strongest
   form: the agent lives where the seat lives.

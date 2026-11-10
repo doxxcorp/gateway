@@ -133,8 +133,11 @@ wg_sync=off
 state_dir=/var/lib/doxxgateway
 
 # Where received files land (chat attachments and accepted NetDrop
-# transfers, under netdrop-received/<transfer_id>/).
-download_dir=/tmp
+# transfers, under netdrop-received/<transfer_id>/). Keep it under the
+# state dir: the hardened systemd unit gives the gateway a PRIVATE /tmp,
+# so a /tmp landing dir is invisible to the agent. Also the only place the
+# media {path} send form may read from, with the OS temp dir.
+download_dir=/var/lib/doxxgateway/downloads
 
 # journal_retention_days: how long the agent journal keeps its records on
 # disk. The journal is CONTENT-FREE by law (Sep 2026): message text, mention

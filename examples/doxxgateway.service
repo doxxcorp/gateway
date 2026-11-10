@@ -1,30 +1,84 @@
-# doxxgateway.service - the gateway itself (bot seat + P2P plane).
-#
-# This is what makes your agent REACHABLE: it holds the chat seat and
-# journals every inbound message durably. It does NOT make the agent
-# answer - that is the wake loop (doxxgw-watch.service, next to this one).
-# "Connected is not present": see the README.
+# doxxgateway.service - the gateway itself (seat + P2P plane), HARDENED.
 #
 # Install:
 #   sudo cp doxxgateway.service /etc/systemd/system/
 #   sudo systemctl enable --now doxxgateway
+# It does NOT make the agent answer - that is the wake loop
+# (doxxgw-watch.service, next to this one). "Connected is not present".
 #
-# Runs as root: the gateway binds the kernel WireGuard interface and (when
-# firewall= is set) manages an nftables/iptables wall. The AGENT HANDLER
-# does not run here - it runs unprivileged under doxxgw-watch.service.
+# The HARDENED unit (Barrett, Nov 10 2026): the gateway keeps root, because
+# the P2P plane lives on ports below 1024 (TCP/UDP 8, UDP 9, UDP 10) and a
+# low port is one only root can bind, so nothing else on the box can squat
+# the gateway's port before it starts and impersonate it. Root is then
+# stripped to that single thing: no DAC override, no ptrace, no modules,
+# no mounts, no setuid, read-only system, no homes, no shadow, no host ssh
+# keys, no other service's secrets, no exec of anything but the gateway
+# itself. If the process is ever owned, the attacker holds exactly what the
+# gateway legitimately has: its state dir and its sockets.
+#
+# This base unit is complete for a DEVICE SEAT on a doxx.net VPS (mode=device,
+# firewall=off: the host's wall owns the ports) and for any agent box that
+# runs with firewall=off and an operator-managed interface. A box that lets
+# the gateway run the kernel wall (firewall=auto|nft|iptables) or reconcile
+# routing= (wg-quick) needs the drop-in next to this file:
+#   sudo mkdir -p /etc/systemd/system/doxxgateway.service.d
+#   sudo cp doxxgateway-kernel-wall.conf /etc/systemd/system/doxxgateway.service.d/kernel-wall.conf
+#
+# download_dir must live under the state dir (/var/lib/doxxgateway/downloads,
+# the setup default since Nov 10 2026): PrivateTmp hides /tmp from everyone
+# else, so a conf still pointing at /tmp receives files nobody can read.
 
 [Unit]
-Description=doxx.net gateway (agent seat + P2P plane)
+Description=doxx.net gateway (device seat or agent host, P2P plane)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/doxxGateway run -config /etc/doxxgateway/doxxGateway.conf
-# Backstop: even a SIGKILL'd gateway leaves no kernel wall behind.
-ExecStopPost=/usr/local/bin/doxxGateway cleanup-firewall -config /etc/doxxgateway/doxxGateway.conf
 Restart=on-failure
 RestartSec=3
+UMask=0077
+
+# Root uid, root stripped to the low ports.
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+# Filesystem: everything read-only except the state dir.
+StateDirectory=doxxgateway
+StateDirectoryMode=0700
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/etc/doxxgateway
+InaccessiblePaths=-/etc/shadow -/etc/gshadow -/etc/ssh -/etc/wireguard -/var/lib/dn-vps
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+
+# Kernel surface.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Network: the P2P plane and the control plane (AF_NETLINK reads the
+# interface table for the tunnel addresses).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+# Nothing but the gateway binary may exec.
+NoExecPaths=/
+ExecPaths=/usr/local/bin/doxxGateway
 
 [Install]
 WantedBy=multi-user.target
